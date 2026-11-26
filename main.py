@@ -11,10 +11,17 @@ page = 1
 while True:
     url = base_url.format(page)
 
-    response = requests.get(url)
+    # response = requests.get(url)
 
-    if response.status_code != 200:
-        break
+    # if response.status_code != 200:
+    #     break
+    try:
+       response = requests.get(url, timeout=10)
+       response.raise_for_status()
+
+    except requests.exceptions.RequestException as e:
+       print(f"Failed to scrape page {page}: {e}")
+       break
 
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -27,9 +34,22 @@ while True:
         title = book.find("h3").find("a").get_text(strip=True)
         price = book.find("p", class_="price_color").get_text(strip=True)
 
+        if not title:
+            continue
+
+        try:
+            cleaned_price = price.replace("£", "").strip()
+            numeric_price = float(cleaned_price)
+        except ValueError:
+            continue
+
+
+        if numeric_price <= 0:
+            continue
+
         book_data = {
             "title": title,
-            "price": price
+            "price": numeric_price
         }
 
         scrapped_books.append(book_data)
