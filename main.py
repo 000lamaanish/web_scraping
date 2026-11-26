@@ -8,29 +8,52 @@ base_url = "https://books.toscrape.com/catalogue/page-{}.html"
 scrapped_books = []
 page = 1
 
-while True:
-    url = base_url.format(page)
-
-    # response = requests.get(url)
-
-    # if response.status_code != 200:
-    #     break
+def fetch_page(url):
     try:
-       response = requests.get(url, timeout=10)
-       response.raise_for_status()
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.content
 
     except requests.exceptions.RequestException as e:
-       print(f"Failed to scrape page {page}: {e}")
-       break
+        print(f"Request failed: {e}")
+        return None
 
-    soup = BeautifulSoup(response.content, "html.parser")
+
+def extract_books(html):
+    soup = BeautifulSoup(html, "html.parser")
 
     books = soup.find_all("article", class_="product_pod")
 
-    if not books:
-        break
+    extracted_books = []
 
     for book in books:
+        title = book.find("h3").find("a").get_text(strip=True)
+        price = book.find("p", class_="price_color").get_text(strip=True)
+
+        extracted_books.append({
+            "title": title,
+            "price": price
+        })
+
+    return extracted_books
+
+    
+while True:
+    url = base_url.format(page)
+
+    html = fetch_page(url)
+
+    if html is None:
+        break
+
+    extracted_books = extract_books(html)
+
+    if not extracted_books:
+       break
+
+    scrapped_books.extend(extracted_books)
+
+    for book in scrapped_books:
         title = book.find("h3").find("a").get_text(strip=True)
         price = book.find("p", class_="price_color").get_text(strip=True)
 
