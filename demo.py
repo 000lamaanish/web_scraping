@@ -1,30 +1,31 @@
-import logging
 
+import csv
+import logging
+import requests
+from bs4 import BeautifulSoup
+
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("scraper.log"),
+        logging.FileHandler("scraper.log", encoding="utf-8"),
         logging.StreamHandler()
     ]
 )
 
 
-import csv
-import requests
-from bs4 import BeautifulSoup
-
-BASE_URL = "https://books.toscrape.com/catalogue/page-{}.html"
-
 def fetch_page(url):
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
+        logging.info("Successfully fetched: %s", url)
         return response.content
 
     except requests.exceptions.RequestException as e:
-        print(f"Request failed: {e}")
+        logging.error("Request failed for %s: %s", url, e)
         return None
+
 
 def extract_books(html):
     soup = BeautifulSoup(html, "html.parser")
@@ -43,8 +44,8 @@ def extract_books(html):
 
         books.append(book_data)
 
+    logging.info("Extracted %d books", len(books))
     return books
-
 
 
 def transform_book(book):
@@ -52,23 +53,24 @@ def transform_book(book):
     price = book["price"].replace("£", "").strip()
 
     if not title:
+        logging.warning("Skipping book with empty title")
         return None
 
     try:
         numeric_price = float(price)
 
     except ValueError:
+        logging.warning("Invalid price for book: %s", title)
         return None
 
     if numeric_price <= 0:
+        logging.warning("Non-positive price for book: %s", title)
         return None
 
-    cleaned_book = {
+    return {
         "title": title,
         "price": numeric_price
     }
-
-    return cleaned_book
 
 
 def scrape_all_pages():
@@ -78,16 +80,18 @@ def scrape_all_pages():
     while True:
         url = f"https://books.toscrape.com/catalogue/page-{page}.html"
 
-        print(f"Scraping page {page}...")
+        logging.info("Starting page %d", page)
 
         html = fetch_page(url)
 
         if html is None:
+            logging.info("Stopping pagination at page %d", page)
             break
 
         extracted_books = extract_books(html)
 
         if not extracted_books:
+            logging.info("No books found on page %d", page)
             break
 
         for book in extracted_books:
@@ -96,80 +100,40 @@ def scrape_all_pages():
             if cleaned_book is not None:
                 all_books.append(cleaned_book)
 
+        logging.info(
+            "Completed page %d. Total collected: %d",
+            page,
+            len(all_books)
+        )
+
         page += 1
 
     return all_books
 
+
 def save_to_csv(books):
     if not books:
-        print("No books available to save.")
+        logging.warning("No books available to save")
         return
 
     with open("books.csv", "w", newline="", encoding="utf-8") as file:
         fieldnames = ["title", "price"]
 
         writer = csv.DictWriter(file, fieldnames=fieldnames)
-
         writer.writeheader()
         writer.writerows(books)
 
-    print(f"Successfully saved {len(books)} books to books.csv")
-
-
-# url = "https://books.toscrape.com/"
-# html=fetch_page(url)  
-# if html:
-#     print("successful")  
-
-# extracted_books=extract_books(html)  
-# print(extracted_books[0])
-
-# cleaned_books=[]
-# for book in extracted_books:
-#     cleaned_book=transform_book(book)
-#     if cleaned_book is not None:
-#         cleaned_books.append(cleaned_book)
-    
-# print(cleaned_books[0])
-
-# print(f"\nTotal books scraped: {len(books)}")
-# print(books[:5])
+    logging.info("Successfully saved %d books to books.csv", len(books))
 
 
 def main():
+    logging.info("Scraper pipeline started")
+
     books = scrape_all_pages()
     save_to_csv(books)
 
-    print(f"Total books processed: {len(books)}")
+    logging.info("Scraper pipeline finished. Total books: %d", len(books))
+
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
-
-
-
-def save_to_csv(books):
-    pass
-
-
-def main():
-    pass
-
-
-# if __name__ == "__main__":
-#     main()
-
-
-
-# if __name__ == "__main__":
-#     url = "https://books.toscrape.com/"
-#     html = fetch_page(url)
-
-#     if html:
-#         print("Page fetched successfully!")
-#         print(type(html))
-#         print(len(html))
